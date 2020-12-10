@@ -43,10 +43,12 @@ node default {
             "libxrandr-dev",
             "libncurses5",
             "libncurses5-dev",
+            "openssh-server",
             "qemu",
             "silversearcher-ag",
             "tmux",
             "valgrind",
+            "vim-nox",
             "autoconf",
             "wget",
             "python3",
@@ -57,6 +59,7 @@ node default {
             "glibc-doc",
             "libx32gcc-4.8-dev",
             "libc6-dev-i386",
+            "systemd",
         ]:
           ensure => installed;
         [
