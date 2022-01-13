@@ -22,16 +22,10 @@ RUN apt-get update \
         jupyter \
         less \
         libc6-dev \
-        libfuse-dev \
-        libjson-c-dev \
-        libncurses5 \
-        libncurses5-dev \
-        libxrandr-dev \
         make \
         man-db \
         openssh-server \
         python3 \
-        python3-pip \
         python3-matplotlib \
         python3-numpy \
         qemu-system-x86 \
@@ -45,12 +39,7 @@ RUN apt-get update \
         valgrind \
         vim \
         wget \
-        zlib1g \
-        zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --only-binary :all: \
-        grpcio \
-        grpcio-tools
 
 # Add vagrant user.
 RUN useradd --create-home --shell /bin/bash vagrant \
