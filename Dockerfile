@@ -1,3 +1,29 @@
+FROM ubuntu:18.04 AS bochs-builder
+
+ENV VERSION=2.6.7
+
+# Install bochs dependencies.
+RUN apt-get update \
+    && apt-get --no-install-recommends -y install \
+        curl \
+        gcc \
+        g++ \
+        libc6-dev \
+        libncurses-dev \
+        libx11-dev \
+        libxrandr-dev \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install bochs.
+RUN curl -Lo bochs-"$VERSION".tar.gz http://downloads.sourceforge.net/project/bochs/bochs/"$VERSION"/bochs-"$VERSION".tar.gz \
+    && tar -xzf bochs-"$VERSION".tar.gz \
+    && mv bochs-"$VERSION" bochs \
+    && cd bochs \
+    && ./configure --build="$(arch)"-unknown-linux-gnu --enable-gdb-stub --with-x --with-x11 --with-term --with-nogui \
+    && make -j \
+    && make install
+
 FROM ubuntu:18.04
 
 # Install packages.
@@ -7,8 +33,6 @@ RUN printf 'y\nY\n' | unminimize \
 RUN apt-get update \
     && apt-get --no-install-recommends -y install \
         ack-grep \
-        autoconf \
-        bochs \
         cgdb \
         clang \
         clang-format \
@@ -22,6 +46,9 @@ RUN apt-get update \
         jupyter \
         less \
         libc6-dev \
+        libncurses5 \
+        libx11-6 \
+        libxrandr2 \
         make \
         man-db \
         openssh-server \
@@ -40,6 +67,10 @@ RUN apt-get update \
         vim \
         wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy bochs from builder.
+COPY --from=bochs-builder /bochs /bochs
+RUN cd /bochs && make install
 
 # Add vagrant user.
 RUN useradd --create-home --shell /bin/bash vagrant \
