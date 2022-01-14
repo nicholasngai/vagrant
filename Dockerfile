@@ -30,7 +30,18 @@ FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN printf 'y\nY\n' | unminimize \
     && rm -rf /var/lib/apt/lists/*
-RUN apt-get update \
+RUN if [ "$(arch)" != 'x86_64' ]; then \
+        dpkg --add-architecture amd64 \
+        && sed -Ei "s/deb http/deb [arch=$(dpkg --print-architecture)] http/" /etc/apt/sources.list \
+        && . /etc/os-release \
+        && printf "\n\
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu $VERSION_CODENAME main restricted universe multiverse\n\
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu $VERSION_CODENAME-updates main restricted universe multiverse\n\
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu $VERSION_CODENAME-security main restricted universe multiverse\n\
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu $VERSION_CODENAME-backports main restricted universe multiverse\n" \
+            >> /etc/apt/sources.list \
+    ; fi \
+    && apt-get update \
     && apt-get --no-install-recommends -y install \
         ack-grep \
         cgdb \
@@ -38,8 +49,6 @@ RUN apt-get update \
         clang-format \
         cmake \
         exuberant-ctags \
-        gcc-multilib \
-        gdb \
         git \
         glibc-doc \
         golang \
@@ -66,11 +75,54 @@ RUN apt-get update \
         valgrind \
         vim \
         wget \
+        $(if [ "$(arch)" = 'x86_64' ]; then echo \
+            gcc-multilib \
+            gdb \
+        ; else echo \
+            gcc-multilib-x86-64-linux-gnu \
+            gdb-multiarch \
+            libc6:amd64 \
+            libc6-i386:amd64 \
+        ; fi) \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy bochs from builder.
 COPY --from=bochs-builder /bochs /bochs
 RUN cd /bochs && make install
+
+# Add a couple files to /usr/local/bin to mimic the functionality of a native
+# x86_64 toolchain:
+#
+# - Link gdb-multiarch to gdb.
+# - Link x86_64-linux-gnu-* binutils to binutils.
+# - Link to or add wrappers for x86_64-linux-gnu-* to i386-elf-* .
+# - Add wrapper to clang to use clang with x86_64 target.
+# - Update cc alternative to point to x86_64 compilers.
+RUN if [ "$(arch)" != 'x86_64' ]; then \
+        ln -s /usr/bin/gdb-multiarch /usr/local/bin/gdb \
+        && for f in /usr/bin/x86_64-linux-gnu-*; do \
+            basename=$(basename "$f") \
+            && name=${basename#x86_64-linux-gnu-} \
+            && ln -s "$f" /usr/local/bin/"$name" \
+            && case "$name" in \
+                gcc) \
+                    printf "#!/bin/sh\n\nexec \"$f\" -m32 \"\$@\"\n" > /usr/local/bin/i386-elf-"$name" \
+                    && chmod +x /usr/local/bin/i386-elf-"$name" \
+                ;; \
+                ld) \
+                    printf "#!/bin/sh\n\nexec \"$f\" -melf_i386 \"\$@\"\n" > /usr/local/bin/i386-elf-"$name" \
+                    && chmod +x /usr/local/bin/i386-elf-"$name" \
+                ;; \
+                *) \
+                    ln -s "$f" /usr/local/bin/i386-elf-"$name" \
+                ;; \
+            esac \
+        ; done \
+        && printf "#!/bin/sh\n\nexec /usr/bin/clang -target x86_64 \"\$@\"" >> /usr/local/bin/clang \
+        && chmod +x /usr/local/bin/clang \
+        && update-alternatives --install /usr/bin/cc cc /usr/bin/x86_64-linux-gnu-gcc 0 \
+        && update-alternatives --set cc /usr/bin/x86_64-linux-gnu-gcc \
+    ; fi
 
 # Add vagrant user.
 RUN useradd --create-home --shell /bin/bash vagrant \
